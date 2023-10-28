@@ -1,0 +1,56 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "User",
+    "description": "A registered user",
+    "type": "object",
+    "properties": {
+        "id": {
+            "description": "The unique identifier for a user",
+            "type": "integer"
+        },
+        "name": {
+            "description": "Name of the user",
+            "type": "string"
+        },
+        "email": {
+            "description": "Email of the user",
+            "type": "string"
+        },
+        "usertype": {
+            "description": "Type of the user",
+            "type": "string"
+        },
+        "created_at": {
+            "description": "Date of creation",
+            "type": "string",
+            "format": "date-time"
+        },
+        "comments": {
+            "description": "Comments of the user",
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "description": "The unique identifier for a comment",
+                        "type": "integer"
+                    },
+                    "comment": {
+                        "description": "Comment of the user",
+                        "type": "string"
+                    },
+                    "created_at": {
+                        "description": "Date of creation",
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                }
+            }
+        }
+    },
+    "required": [
+        "productId",
+        "productName",
+        "price"
+    ]
+}

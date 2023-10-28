@@ -1,0 +1,6 @@
+*_generated.go
+got/
+.air.toml
+bin
+tmp
+.vscode
