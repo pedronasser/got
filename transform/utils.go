@@ -83,7 +83,7 @@ func executeGoImports(file string) error {
 		return err
 	}
 	goImportsBin := filepath.Join(gopath, "bin", "goimports")
-	cmd := exec.Command(goImportsBin, "-w", file)
+	cmd := exec.Command(goImportsBin, "-w", "-v", file)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err = cmd.Run()

@@ -1,7 +1,6 @@
 package transform
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
 	"go/ast"
@@ -77,11 +76,17 @@ func (t *gotTransformer) transformFile(path string) error {
 		return err
 	}
 
+	var isModified bool
 	if len(usages) > 0 {
 		t.log("Applying builtin only attributes...")
-		var offset int
-		if offset, err = t.processAttributeTransforms(0, src, &usages, true); err != nil {
+
+		var isMod bool
+		if isMod, err = t.processAttributeTransforms(src, &usages, true); err != nil {
 			return err
+		}
+
+		if isMod {
+			isModified = true
 		}
 
 		err = t.loadExtractedFunctions()
@@ -90,9 +95,17 @@ func (t *gotTransformer) transformFile(path string) error {
 		}
 
 		t.log("Applying all remaining attributes...")
-		if _, err = t.processAttributeTransforms(offset, src, &usages, false); err != nil {
+		if isMod, err = t.processAttributeTransforms(src, &usages, false); err != nil {
 			return err
 		}
+
+		if isMod {
+			isModified = true
+		}
+	}
+
+	if !isModified {
+		return nil
 	}
 
 	t.log("Cleaning up...")
@@ -114,7 +127,10 @@ func (t *gotTransformer) transformFile(path string) error {
 	}
 
 	t.log("Executing goimports on file")
-	executeGoImports(goFile)
+	err = executeGoImports(goFile)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -166,26 +182,25 @@ func (t *gotTransformer) loadExtractedFunctions() error {
 }
 
 func (t *gotTransformer) processAttributeTransforms(
-	offset int,
 	src *bytes.Buffer,
 	usages *[]*attributesUsage,
 	builtinOnly bool,
-) (int, error) {
+) (isModified bool, err error) {
 	if len(*usages) == 0 {
-		return 0, nil
+		return false, nil
 	}
 
 	fset := token.NewFileSet()
 	pfile, err := parser.ParseFile(fset, "", src, parser.ParseComments)
 	if err != nil {
-		return 0, fmt.Errorf("Failed to parse file: %v", err)
+		return false, fmt.Errorf("Failed to parse file: %v", err)
 	}
 
 	buf := make([]byte, src.Len())
 	copy(buf, src.Bytes())
 	updatedSrc := bytes.NewBuffer(buf)
 
-	srcOffset := offset
+	srcOffset := 0
 	process := func(c *astutil.Cursor, usage *attributesUsage) error {
 		originalLength := c.Node().End() - c.Node().Pos()
 		pos := int(c.Node().Pos()) - 1 - srcOffset
@@ -212,7 +227,7 @@ func (t *gotTransformer) processAttributeTransforms(
 
 			if !builtinOnly {
 				if handler, ok := t.decorators[attributeName]; ok {
-					t.log("Executing decorator", attributeName, context.args, "on position", pos)
+					t.log(fmt.Sprintf("Executing decorator: `%s` on position %d", attributeName, pos))
 					err := handler(context)
 					if err != nil {
 						return fmt.Errorf("Failed to execute decorator `%s`: %v", attributeName, err)
@@ -223,16 +238,18 @@ func (t *gotTransformer) processAttributeTransforms(
 		}
 
 		if context.modified {
-			t.log("Updating source")
+			t.log(fmt.Sprintf("Attribute `%s` modified source", usage.attributes[0].Name), "")
 			updatedNode := bytes.NewBuffer([]byte{})
 			printer.Fprint(updatedNode, fset, context.currentNode)
-			offset += updatedNode.Len() - int(originalLength)
+			srcOffset += updatedNode.Len() - int(originalLength)
 
 			updatedSrc.Reset()
 			err := printer.Fprint(updatedSrc, fset, pfile)
 			if err != nil {
 				return fmt.Errorf("Failed to update source: %v", err)
 			}
+
+			isModified = true
 		}
 
 		return nil
@@ -300,14 +317,14 @@ func (t *gotTransformer) processAttributeTransforms(
 			return false
 		})
 		if processErr != nil {
-			return 0, err
+			return false, err
 		}
 	}
 
 	src.Reset()
 	_, _ = src.Write(updatedSrc.Bytes())
 
-	return srcOffset, nil
+	return isModified, nil
 }
 
 type DeletedNode struct{}
@@ -369,30 +386,30 @@ func (t *TransformContext) InsertAfter(node ast.Node) {
 }
 
 func cleanupSource(src *bytes.Buffer) error {
-	lines := bufio.NewScanner(bytes.NewReader(src.Bytes()))
-	updated := bytes.NewBuffer([]byte{})
-	for lines.Scan() {
-		line := lines.Text()
-		sline := strings.TrimSpace(line)
+	fset := token.NewFileSet()
 
-		if constraint.IsGoBuild(sline) {
-			exp, err := constraint.Parse(sline)
+	pfile, err := parser.ParseFile(fset, "", src, parser.ParseComments)
+	if err != nil {
+		return fmt.Errorf("Failed to parse file: %v", err)
+	}
+
+	handleComment := func(comment *ast.Comment) string {
+		if constraint.IsGoBuild(comment.Text) {
+			exp, err := constraint.Parse(comment.Text)
 			if err != nil {
-				panic(err)
+				return ""
 			}
 
 			if exp.Eval(hasGeneratedTag) {
-				updated.WriteString(line + "\n")
-				continue
-			} else if strings.Contains(sline, "generated") {
+				return comment.Text
+			} else if strings.Contains(comment.Text, "generated") {
 				result := removeTag(exp, func(tag string) bool {
 					return strings.EqualFold(tag, "generated")
 				})
 				exp = result
 
 				if result != nil {
-					updated.WriteString("//go:build " + result.String() + "\n")
-					continue
+					return "//go:build " + result.String()
 				}
 			}
 
@@ -405,16 +422,53 @@ func cleanupSource(src *bytes.Buffer) error {
 				}
 			}
 
-			updated.WriteString("//go:build " + exp.String() + "\n")
-
-			continue
+			return "//go:build " + exp.String()
 		}
 
-		updated.WriteString(line + "\n")
+		return ""
 	}
 
+	astutil.Apply(pfile, nil, func(c *astutil.Cursor) bool {
+		n := c.Node()
+		if n == nil {
+			return true
+		}
+
+		if comment, ok := n.(*ast.Comment); ok {
+			commentText := handleComment(comment)
+
+			if commentText == "" {
+				c.Delete()
+			} else {
+				comment.Text = commentText
+			}
+
+			return true
+		}
+
+		return true
+	})
+
+	updatedComments := []*ast.CommentGroup{}
+	for _, comments := range pfile.Comments {
+		updatedGroup := []*ast.Comment{}
+		for _, c := range comments.List {
+			commentText := handleComment(c)
+			if commentText != "" {
+				c.Text = commentText
+				updatedGroup = append(updatedGroup, c)
+			}
+		}
+
+		comments.List = updatedGroup
+		if len(comments.List) > 0 {
+			updatedComments = append(updatedComments, comments)
+		}
+	}
+	pfile.Comments = updatedComments
+
 	src.Reset()
-	src.Write(updated.Bytes())
+	printer.Fprint(src, fset, pfile)
 
 	return nil
 }

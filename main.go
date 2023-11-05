@@ -46,17 +46,14 @@ func getArgs() []string {
 			args[i] = strings.Replace(arg, GO_FILE_EXTENSION, ".go", 1)
 		}
 	}
-	return args
+				return args
 }
 
 func runGotCmd(args ...string) error {
-	executeAfterBuild := ""
-	if args[1] == "run" {
-		executeAfterBuild = "run"
-		args[1] = "build"
-	} else if args[1] == "test" {
-		executeAfterBuild = "test"
-	}
+	commandName := args[1]
+
+	args = args[1:]
+
 
 	tagsFound := false
 	outputFile := ""
@@ -70,7 +67,7 @@ func runGotCmd(args ...string) error {
 		}
 	}
 
-	if executeAfterBuild != "test" && outputFile == "" {
+	if commandName == "run" {
 		tmpFile, err := os.CreateTemp("", "gobuild")
 		if err != nil {
 			fmt.Println(err)
@@ -90,15 +87,22 @@ func runGotCmd(args ...string) error {
 	if err != nil {
 		return err
 	}
-	args[len(args)-1] = targetDir
 
 	transformer := GotTransform(targetDir)
 	if err := transformer.Execute(); err != nil {
 		return err
 	}
 
-	if executeAfterBuild != "test" {
-		isBuildSuccess, err := runBuild(args...)
+	switch commandName {
+	case "build":
+		args[len(args)-1] = targetDir
+		_, err := runBuild(args)
+		if err != nil {
+			return err
+		}
+	case "run":
+		args[len(args)-1] = targetDir
+		isBuildSuccess, err := runBuild(args)
 		if err != nil {
 			return err
 		}
@@ -108,14 +112,13 @@ func runGotCmd(args ...string) error {
 			os.Exit(1)
 		}
 
-		if executeAfterBuild == "run" {
-			err = runProgram(outputFile)
-			if err != nil {
-				return err
-			}
+		err = runProgram(outputFile)
+		if err != nil {
+			return err
 		}
-	} else {
-		err = runTest(args...)
+
+	case "test":
+		err := runTest(args...)
 		if err != nil {
 			return err
 		}
@@ -167,7 +170,8 @@ func getTargetDirectory(args ...string) (string, error) {
 	return filepath.Dir(resolved), nil
 }
 
-func runBuild(args ...string) (bool, error) {
+func runBuild(args []string) (bool, error) {
+	args[0] = "build"
 	fmt.Println("Building:", args)
 
 	goroot, err := GetGoRoot()
@@ -238,13 +242,15 @@ func runProgram(programPath string) error {
 }
 
 func runTest(args ...string) error {
+	args[0] = "test"
+
 	goroot, err := GetGoRoot()
 	if err != nil {
 		return err
 	}
 
 	goCmd := filepath.Join(goroot, "bin", "go")
-	fmt.Println("Running:", goCmd, args)
+	fmt.Println("Testing:", args)
 	cmd := exec.Command(goCmd, args...)
 
 	// Set the environment variables
