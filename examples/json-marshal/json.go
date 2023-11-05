@@ -16,9 +16,6 @@ import (
 	"github.com/pedronasser/got/transform"
 )
 
-// Just to prevent the compiler from complaining about unused imports
-var _ = JSON_START_TOKEN
-
 // #[JSON]
 type User struct {
 	Id        int       `json:"id"`
@@ -28,8 +25,12 @@ type User struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+var _ = JSON_START_TOKEN
+
 // #[decorator]
-func JSON(fileSrc []byte, f *ast.File, c *transform.TransformContext, args ...string) (err error) {
+func JSON(c *transform.TransformContext) (err error) {
+	var _ = JSON_START_TOKEN
+
 	// We are only interested in type declarations
 	target := c.Node()
 
@@ -115,7 +116,6 @@ func JSON(fileSrc []byte, f *ast.File, c *transform.TransformContext, args ...st
 
 			fieldName := field.Names[0].Name
 			jsonFieldName := getJSONFieldName(field)
-			fmt.Println("field", fieldName, jsonFieldName)
 
 			writeFieldName(&stmts, jsonFieldName)
 

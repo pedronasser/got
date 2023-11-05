@@ -1,5 +1,3 @@
-//go:build !generated
-
 package json_marshal
 
 import (
