@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"go/ast"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +12,7 @@ import (
 
 var VerboseLog = false
 
+// log prints a message if VerboseLog is true.
 func log(v ...interface{}) {
 	if !VerboseLog {
 		return
@@ -22,6 +22,7 @@ func log(v ...interface{}) {
 	fmt.Println(msg...)
 }
 
+// convertSlice converts a slice of any type to a slice of interface{}.
 func convertSlice[T any](s []T) []interface{} {
 	res := []interface{}{}
 	for _, v := range s {
@@ -30,6 +31,7 @@ func convertSlice[T any](s []T) []interface{} {
 	return res
 }
 
+// LookupGoFiles returns a list of go files in the target directory.
 func LookupGoFiles(targetDir string) []string {
 	foundFiles := []string{}
 
@@ -53,19 +55,7 @@ func LookupGoFiles(targetDir string) []string {
 	return foundFiles
 }
 
-func writeGoFile(path string, w io.Reader) (err error) {
-	nf, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-
-	defer nf.Close()
-
-	_, _ = io.Copy(nf, w)
-
-	return nil
-}
-
+// GetGoRoot returns the GOROOT environment variable.
 func GetGoRoot() (string, error) {
 	// Get GOROOT
 	goRoot := os.Getenv("GOROOT")
@@ -77,6 +67,7 @@ func GetGoRoot() (string, error) {
 	return goRoot, nil
 }
 
+// GetGoFiles returns a list of go files in the target directory.
 func executeGoImports(file string) error {
 	gopath, err := GetGoPath()
 	if err != nil {
@@ -94,6 +85,7 @@ func executeGoImports(file string) error {
 	return nil
 }
 
+// GetGoPath returns the GOPATH environment variable.
 func GetGoPath() (string, error) {
 	// Get GOPATH
 	goPath := os.Getenv("GOPATH")
@@ -105,10 +97,12 @@ func GetGoPath() (string, error) {
 	return goPath, nil
 }
 
+// GetGoFiles returns a list of go files in the target directory.
 func getFileImportsList(p *ast.File) ([]*ast.ImportSpec, error) {
 	return p.Imports, nil
 }
 
+// buildAsPlugin builds the file as a plugin.
 func buildAsPlugin(srcPath, dstPath string) error {
 	goroot, err := GetGoRoot()
 	if err != nil {
@@ -124,6 +118,7 @@ func buildAsPlugin(srcPath, dstPath string) error {
 	return nil
 }
 
+// IsLineCommented checks if the line is commented and starts with the GOT_PREFIX.
 func IsLineGotPrefixed(line string) bool {
 	slashes := 0
 	for i := 0; i < len(line); i++ {
@@ -147,6 +142,7 @@ func IsLineGotPrefixed(line string) bool {
 	return false
 }
 
+// stringify is just a helper function to stringify a value.
 func stringify(d interface{}) string {
 	p, _ := json.MarshalIndent(d, "", "  ")
 	return string(p)

@@ -12,6 +12,9 @@ import (
 
 var Version string
 
+// main is the entry point of the got command.
+// It checks if the command is a got command and executes it.
+// If it's not a got command, it executes the go command.
 func main() {
 	args := getArgs()
 
@@ -36,6 +39,8 @@ func main() {
 	fmt.Println("Running go command:", args)
 }
 
+// getArgs returns the command line arguments.
+// It also sets the VerboseLog variable if the -v flag is present.
 func getArgs() []string {
 	args := os.Args[:]
 	for i, arg := range args {
@@ -46,14 +51,19 @@ func getArgs() []string {
 			args[i] = strings.Replace(arg, GO_FILE_EXTENSION, ".go", 1)
 		}
 	}
-				return args
+	return args
 }
 
+// runGotCmd executes a got command.
+// It checks if the command is a build, run or test command.
+// It checks if the -tags flag is present and adds the "generated" tag.
+// It checks if the -o flag is present and sets the output file.
+// Then it executes the got transformer.
+// Then it executes the go command with the transformed arguments.
 func runGotCmd(args ...string) error {
 	commandName := args[1]
 
 	args = args[1:]
-
 
 	tagsFound := false
 	outputFile := ""
@@ -127,6 +137,7 @@ func runGotCmd(args ...string) error {
 	return nil
 }
 
+// runGoCmd executes a go command with the arguments received
 func runGoCmd(args ...string) error {
 	goroot, err := GetGoRoot()
 	if err != nil {
@@ -160,6 +171,7 @@ func runGoCmd(args ...string) error {
 	return nil
 }
 
+// getTargetDirectory returns the target directory of the go command.
 func getTargetDirectory(args ...string) (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -170,6 +182,7 @@ func getTargetDirectory(args ...string) (string, error) {
 	return filepath.Dir(resolved), nil
 }
 
+// runBuild executes the go build command with the arguments received
 func runBuild(args []string) (bool, error) {
 	args[0] = "build"
 	fmt.Println("Building:", args)
@@ -209,6 +222,7 @@ func runBuild(args []string) (bool, error) {
 	return true, nil
 }
 
+// runProgram executes the program in the specified path
 func runProgram(programPath string) error {
 	fmt.Println("Running:", programPath)
 
@@ -241,6 +255,7 @@ func runProgram(programPath string) error {
 	return nil
 }
 
+// runTest executes the go test command with the arguments received
 func runTest(args ...string) error {
 	args[0] = "test"
 

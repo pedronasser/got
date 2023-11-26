@@ -17,6 +17,10 @@ import (
 	"golang.org/x/tools/go/ast/astutil"
 )
 
+// gotTransformer transforms go files that contains got attributes.
+// First it scans and applies builtin attributes, extracts the functions and
+// saves them as plugins. Then it applies all remaining attributes.
+// Finally it cleans up the source code.
 type gotTransformer struct {
 	baseDir     string
 	currentFile string
@@ -25,9 +29,13 @@ type gotTransformer struct {
 	decorators map[string]ExtractedDecorator
 }
 
+// ExtractedMethod is a function signature for a extracted method.
 type ExtractedMethod = func(...interface{}) interface{}
+
+// ExtractedDecorator is a function signature for a extracted decorator.
 type ExtractedDecorator = func(c *TransformContext) (err error)
 
+// GotTransform creates a new gotTransformer.
 func GotTransform(baseDir string) *gotTransformer {
 	return &gotTransformer{
 		baseDir:     baseDir,
@@ -38,19 +46,25 @@ func GotTransform(baseDir string) *gotTransformer {
 	}
 }
 
+// Execute lookup all go files in the base directory and transforms them.
 func (t *gotTransformer) Execute() error {
 	targetFiles := LookupGoFiles(t.baseDir)
 	for _, path := range targetFiles {
-		err := t.transformFile(path)
+		err := t.executeFile(path)
 		if err != nil {
-			return fmt.Errorf("Failed to transform file `%s`: \n\t%v", path, err)
+			return fmt.Errorf("Failed to transform file `%s`: \n\t%v",
+				path, err)
 		}
 	}
 
 	return nil
 }
 
-func (t *gotTransformer) transformFile(path string) error {
+// executeFile transforms a single go file.
+// This is the main function of the gotExtractor.
+// It reads the file, extracts the attributes, applies the builtin attributes,
+// extracts the functions and saves them as plugins.
+func (t *gotTransformer) executeFile(path string) error {
 	t.currentFile = path
 
 	f, err := os.Open(path)
@@ -121,7 +135,7 @@ func (t *gotTransformer) transformFile(path string) error {
 
 	goFile := strings.Replace(path, GO_FILE_EXTENSION, "_generated.go", 1)
 	t.log("Writing to file:", goFile)
-	err = writeGoFile(goFile, src)
+	err = os.WriteFile(goFile, src.Bytes(), 0644)
 	if err != nil {
 		return err
 	}
@@ -169,7 +183,9 @@ func (t *gotTransformer) loadExtractedFunctions() error {
 	}
 
 	for _, decoratorName := range exportedDecorators {
-		fn, err := loadExtractedFunction[ExtractedDecorator](filepath.Join(t.baseDir, GOT_BUILD_DIR, GOT_DECORATORS_DIR, fmt.Sprintf("%s.so", decoratorName)))
+		fn, err := loadExtractedFunction[ExtractedDecorator](
+			filepath.Join(t.baseDir, GOT_BUILD_DIR, GOT_DECORATORS_DIR,
+				fmt.Sprintf("%s.so", decoratorName)))
 		if err != nil {
 			log(fmt.Sprintf("Failed to load decorator `%s`: %s", decoratorName, err))
 			return err
@@ -217,7 +233,9 @@ func (t *gotTransformer) processAttributeTransforms(
 			attributeName := attribute.Name
 
 			if handler, ok := BuiltinAttributes[attributeName]; ok {
-				t.log(fmt.Sprintf("Executing builtin attribute: `%s` on position %d", attributeName, pos))
+				t.log(fmt.Sprintf(
+					"Executing builtin attribute: `%s` on position %d",
+					attributeName, pos))
 				err := handler(context)
 				if err != nil {
 					return fmt.Errorf("Failed to execute decorator `%s`: %v", attributeName, err)

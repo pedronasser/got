@@ -9,6 +9,12 @@ import (
 	"strings"
 )
 
+// extractAsPlugin extracts the function and saves it as a plugin in the
+// specified directory.
+// First it creates a new directory for the extracted function.
+// Then it creates a new file in the directory with the extracted function.
+// Then it executes goimports on the file.
+// Then it builds the file as a plugin.
 func extractAsPlugin(name, src, extractDir string, imports []*ast.ImportSpec) error {
 	extractedSrc := "package main\n\n"
 	if len(imports) > 0 {

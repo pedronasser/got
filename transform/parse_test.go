@@ -9,7 +9,9 @@ import (
 func testParseInstruction(t *testing.T, input string, expected ...Instruction) {
 	fmt.Println("CASE", input)
 
-	parser := NewInstructionParser(bytes.NewBufferString(input), AllInstructions)
+	parser := NewInstructionParser(
+		bytes.NewBufferString(input), AllInstructions)
+
 	result, err := parser.Parse()
 	if err != nil {
 		t.Fatal(err)
