@@ -15,7 +15,7 @@ import (
 // Then it creates a new file in the directory with the extracted function.
 // Then it executes goimports on the file.
 // Then it builds the file as a plugin.
-func extractAsPlugin(name, src, extractDir string, imports []*ast.ImportSpec) error {
+func extractAsPlugin(name, src, extractDir string, imports []*ast.ImportSpec, hashSum string) error {
 	extractedSrc := "package main\n\n"
 	if len(imports) > 0 {
 		extractedSrc += "import (\n"
@@ -54,6 +54,14 @@ func extractAsPlugin(name, src, extractDir string, imports []*ast.ImportSpec) er
 	err = buildAsPlugin(extractedSrcPath, methodBinPath)
 	if err != nil {
 		return fmt.Errorf("Failed to build plugin: %s", err)
+	}
+
+	hashFile := filepath.Join(extractedSrcDir, "extract.hash")
+	_ = os.Remove(hashFile)
+
+	err = os.WriteFile(hashFile, []byte(hashSum), 0644)
+	if err != nil {
+		return err
 	}
 
 	return nil
